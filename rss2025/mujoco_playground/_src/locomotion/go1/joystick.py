@@ -57,6 +57,10 @@ def default_config() -> config_dict.ConfigDict:
               # Base reward.
               lin_vel_z=-0.5,
               ang_vel_xy=-0.05,
+              # Ayush: yaw-rate penalty, only when the yaw command is ~0.
+              # Weight -50, raised from -0.05 so the penalty still matters
+              # after the reward sum is clipped at 0.
+              yaw_rate=-50,
               orientation=-5.0,
               # Other.
               dof_pos_limits=-1.0,
@@ -412,6 +416,10 @@ class Joystick(go1_base.Go1Env):
         ),
         "lin_vel_z": self._cost_lin_vel_z(self.get_global_linvel(data)),
         "ang_vel_xy": self._cost_ang_vel_xy(self.get_global_angvel(data)),
+        # Ayush: gyro z is the yaw rate the tracking term already uses.
+        "yaw_rate": self._cost_yaw_rate(
+            info["command"], self.get_gyro(data)
+        ),
         "orientation": self._cost_orientation(self.get_upvector(data)),
         "stand_still": self._cost_stand_still(info["command"], data.qpos[7:]),
         "termination": self._cost_termination(done),
@@ -461,6 +469,17 @@ class Joystick(go1_base.Go1Env):
   def _cost_ang_vel_xy(self, global_angvel) -> jax.Array:
     # Penalize xy axes base angular velocity.
     return jp.sum(jp.square(global_angvel[:2]))
+
+  def _cost_yaw_rate(
+      self, commands: jax.Array, gyro: jax.Array
+  ) -> jax.Array:
+    # Ayush: penalize yaw rate only when the yaw command is about 0.
+    # 0.01 matches the zero-command tolerance used by stand_still.
+    # The scale in reward_config (-50) is the weight on yaw_rate^2.
+    yaw_cmd = commands[2]
+    yaw_rate = gyro[2]
+    straight = jp.abs(yaw_cmd) < 0.01
+    return jp.square(yaw_rate) * straight
 
   def _cost_orientation(self, torso_zaxis: jax.Array) -> jax.Array:
     # Penalize non flat base orientation.
