@@ -31,7 +31,9 @@ python go1_ayush/play_viewer.py --run latest
 
 `--run stock` is the finished stock checkpoint. `--run yaw` is the finished yaw-penalty checkpoint. `--run latest` is the newest checkpoint under `~/King_stuff/RL_sim/logs`. With neither flag, the viewer loads stock.
 
-About once a second the terminal prints the command, the actual body vx/vy/yaw, and the error (`cmd - act`). Closing the window prints the mean over the run.
+`python go1_ayush/play_and_plot.py --run latest` is the same live window, and closing it writes `/home/kingayush/King_stuff/RL_sim/Sim_Videos/go1-push-controller.png`.
+
+The window prints `Accepting commands.` when the control loop starts taking vx/vy/yaw. About once a second the terminal prints the command, the actual body vx/vy/yaw, the error (`cmd - act`), and the kick (`kick 0.0 N` when no shove is active). A kick lasts a fraction of a second, so while it is on the terminal also prints that force and direction every control step. An orange arrow on the trunk points the same way. Closing the window prints the mean over the run.
 
 ## Xbox controller
 

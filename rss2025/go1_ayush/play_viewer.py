@@ -316,12 +316,82 @@ def _fmt_twist(label, values):
   return f"{label} vx={vx: .2f} vy={vy: .2f} yaw={yaw: .2f}"
 
 
-def _print_twist(prefix, command, actual):
+def _kick_force(env, data):
+  """World-frame force on the trunk, in newtons.
+
+  This is the vector `_maybe_apply_perturbation` writes into
+  `xfrc_applied` for this step: `force * pert_dir`. The wait branch
+  writes zeros, so a quiet step is 0 N. The kick code is not changed.
+  """
+  return np.asarray(data.xfrc_applied[env._torso_body_id, :3], dtype=np.float64)
+
+
+def _fmt_kick(force) -> str:
+  """`kick 0.0 N`, or the newton magnitude and the unit direction."""
+  mag = float(np.linalg.norm(force))
+  if mag < 1e-3:
+    return "kick 0.0 N"
+  direction = force / mag
+  return (
+      f"kick {mag:.1f} N"
+      f" dir x={direction[0]: .2f} y={direction[1]: .2f} z={direction[2]: .2f}"
+  )
+
+
+def _draw_kick(viewer, origin, force) -> None:
+  """Draw the kick into the passive viewer's user scene.
+
+  MuJoCo 3.16 copies `user_scn` geoms during `sync` and appends them
+  after the robot scene. The geom is finished first, then `ngeom` is
+  set, so sync cannot publish a cleared arrow. The shaft starts just
+  above the trunk, in the world frame, and is at least 0.5 m long so
+  it clears the body.
+  """
+  scn = viewer.user_scn
+  if scn is None:
+    raise RuntimeError(
+        "This MuJoCo viewer has no user scene, so it cannot draw the kick arrow."
+    )
+  mag = float(np.linalg.norm(force))
+  if mag < 1e-3:
+    scn.ngeom = 0
+    return
+  direction = np.asarray(force, dtype=np.float64) / mag
+  # 0.5 m clears the trunk. Extra length tracks the force, up to 1.6 m.
+  length = float(np.clip(0.5 + mag / 120.0, 0.5, 1.6))
+  start = np.asarray(origin, dtype=np.float64).reshape(3).copy()
+  start[2] += 0.08
+  end = start + direction * length
+  geom = scn.geoms[0]
+  mujoco.mjv_initGeom(
+      geom,
+      mujoco.mjtGeom.mjGEOM_ARROW,
+      np.zeros(3, dtype=np.float64),
+      np.zeros(3, dtype=np.float64),
+      np.zeros(9, dtype=np.float64),
+      np.array([1.0, 0.35, 0.0, 1.0], dtype=np.float32),
+  )
+  # Width is the shaft radius in metres. 4.5 cm reads at the default camera.
+  mujoco.mjv_connector(
+      geom,
+      int(mujoco.mjtGeom.mjGEOM_ARROW),
+      0.045,
+      start,
+      end,
+  )
+  geom.category = mujoco.mjtCatBit.mjCAT_DECOR
+  geom.emission = 1.0
+  geom.specular = 0.3
+  scn.ngeom = 1
+
+
+def _print_twist(prefix, command, actual, kick):
   error = tuple(command[i] - actual[i] for i in range(3))
   print(
       f"{prefix}  {_fmt_twist('cmd', command)}"
       f"  {_fmt_twist('act', actual)}"
-      f"  {_fmt_twist('err', error)}",
+      f"  {_fmt_twist('err', error)}"
+      f"  {_fmt_kick(kick)}",
       flush=True,
   )
 
@@ -348,6 +418,9 @@ def view(env, control_step, state, rng, command, stick=None) -> None:
     viewer.cam.elevation = -20.0
     viewer.cam.azimuth = 90.0
     print("Opening viewer.")
+    # Commands are applied from the first control step. There is no
+    # separate standup. Say so once, when the loop starts taking vx/vy/yaw.
+    print("Accepting commands.", flush=True)
     while viewer.is_running():
       tick = time.perf_counter()
       if stick is not None:
@@ -371,9 +444,18 @@ def view(env, control_step, state, rng, command, stick=None) -> None:
         sum_act[i] += act[i]
         sum_err[i] += cmd[i] - act[i]
       steps += 1
+      kick = _kick_force(env, state.data)
+      # The pulse lasts 0.05–0.2 s, so a 1 s sample misses it. While the
+      # force is on, print every control step. Quiet steps stay on the 1 s line.
+      if float(np.linalg.norm(kick)) >= 1e-3:
+        print(
+            f"t={steps * env.dt:.2f}s  {_fmt_kick(kick)}",
+            flush=True,
+        )
       if steps % print_every == 0:
-        _print_twist(f"t={steps * env.dt:.0f}s", cmd, act)
+        _print_twist(f"t={steps * env.dt:.0f}s", cmd, act, kick)
       sync_mujoco(model, data, state)
+      _draw_kick(viewer, data.xpos[env._torso_body_id], kick)
       viewer.sync()
       remain = env.dt - (time.perf_counter() - tick)
       if remain > 0:
