@@ -25,6 +25,12 @@ FEET_ONLY_FLAT_TERRAIN_XML = (
 FEET_ONLY_ROUGH_TERRAIN_XML = (
     ROOT_PATH / "xmls" / "scene_mjx_feetonly_rough_terrain.xml"
 )
+FEET_ONLY_STAIRS_XML = (
+    ROOT_PATH / "xmls" / "scene_mjx_feetonly_stairs.xml"
+)
+FEET_ONLY_TERRAIN_MIX_XML = (
+    ROOT_PATH / "xmls" / "scene_mjx_feetonly_terrain_mix.xml"
+)
 FULL_FLAT_TERRAIN_XML = ROOT_PATH / "xmls" / "scene_mjx_flat_terrain.xml"
 FULL_COLLISIONS_FLAT_TERRAIN_XML = (
     ROOT_PATH / "xmls" / "scene_mjx_fullcollisions_flat_terrain.xml"
@@ -35,6 +41,9 @@ def task_to_xml(task_name: str) -> epath.Path:
   return {
       "flat_terrain": FEET_ONLY_FLAT_TERRAIN_XML,
       "rough_terrain": FEET_ONLY_ROUGH_TERRAIN_XML,
+      # The stairs scene already existed. The mix task reads its tread.
+      "stairs": FEET_ONLY_STAIRS_XML,
+      "terrain_mix": FEET_ONLY_TERRAIN_MIX_XML,
   }[task_name]
 
 

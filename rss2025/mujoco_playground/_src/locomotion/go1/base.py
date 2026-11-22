@@ -49,9 +49,7 @@ class Go1Env(mjx_env.MjxEnv):
     super().__init__(config, config_overrides)
 
     self._model_assets = get_assets()
-    self._mj_model = mujoco.MjModel.from_xml_string(
-        epath.Path(xml_path).read_text(), assets=self._model_assets
-    )
+    self._mj_model = self._load_mj_model(xml_path)
     self._mj_model.opt.timestep = self._config.sim_dt
     self._mj_model.opt.ccd_iterations = 20
 
@@ -64,6 +62,12 @@ class Go1Env(mjx_env.MjxEnv):
     self._mj_model.vis.global_.offwidth = 3840
     self._mj_model.vis.global_.offheight = 2160
 
+    # Joystick terrain mix fills the heightfield before the model is copied
+    # onto the device. Other Go1 tasks do not define this hook.
+    prepare = getattr(self, "_prepare_mj_model", None)
+    if prepare is not None:
+      prepare(self._mj_model)
+
     self._mjx_model = mjx_env.put_model(
         self._mj_model, impl=self._config.impl
     )
@@ -75,6 +79,12 @@ class Go1Env(mjx_env.MjxEnv):
         self._mj_model.sensor(f"{geom}_floor_found").id
         for geom in consts.FEET_GEOMS
     ]
+
+  def _load_mj_model(self, xml_path: str) -> mujoco.MjModel:
+    """Compile the task XML."""
+    return mujoco.MjModel.from_xml_string(
+        epath.Path(xml_path).read_text(), assets=self._model_assets
+    )
 
   # Sensor readings.
 

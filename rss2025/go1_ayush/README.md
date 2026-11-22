@@ -52,3 +52,5 @@ Stick map. Values are scaled to the ranges `joystick.py` samples (`command_confi
 - Right stick left: +yaw. Right: -yaw.
 
 If `/dev/input/js0` is missing, the script prints that and keeps `--vx --vy --yaw`. If the controller is connected, it prints that the sticks override the flags and reads them every frame. This pad also reports -1 on every stick axis when it is asleep. That is not a real push, so the flags stay until a stick moves off -1.
+
+`python go1_ayush/play_terrain.py` from `rss2025` opens one checker floor at the terrain-mix checkpoint, with the robot on the open floor facing forward: stairs 1.5 m ahead, a 5° slope 1.5 m to the left, and a 5 cm bump patch 1.5 m to the right.

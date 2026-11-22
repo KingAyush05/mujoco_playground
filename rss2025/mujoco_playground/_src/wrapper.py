@@ -119,6 +119,10 @@ def wrap_for_brax_training(
   )
   if defer_rendering:
     env.defer_rendering()  # pyrefly: ignore[missing-attribute]
+  # Terrain mix samples a new tile every episode. The default autoreset
+  # restores the first cached pose, so this task asks for a full reset.
+  if not full_reset and getattr(env, "needs_full_reset", False):
+    full_reset = True
   if randomization_fn is None:
     env = brax_training.VmapWrapper(env)  # pyrefly: ignore[bad-argument-type, bad-assignment]
   else:
@@ -218,6 +222,20 @@ class BraxAutoResetWrapper(Wrapper):
         done=jp.zeros_like(state.done)
     )
     state = self.env.step(state, action)
+
+    # The mix task updates its level during the step that ends the episode.
+    # Place the next episode after that update, on the tile for the new level.
+    if (
+        self._full_reset
+        and reset_state is not None
+        and getattr(self.unwrapped, "needs_full_reset", False)
+    ):
+      level = state.info[f"{self._info_key}_preserve_info"]["terrain_level"]
+      reset_state = jax.vmap(self.unwrapped.place_terrain_mix)(
+          reset_state, level, reset_key
+      )
+      reset_data = reset_state.data
+      reset_obs = reset_state.obs
 
     def where_done(x, y):
       done = state.done
